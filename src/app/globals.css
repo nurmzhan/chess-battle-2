@@ -1,0 +1,210 @@
+/* src/app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-deep: #070710;
+  --bg-card: #0f0f1f;
+  --bg-elevated: #161628;
+  --border: #2a2a4a;
+  --border-glow: #4a3f8f;
+  --text-primary: #e8e0f0;
+  --text-secondary: #9090b8;
+  --text-muted: #505078;
+  --accent: #c89b3c;
+  --accent-glow: rgba(200, 155, 60, 0.3);
+  --red: #e94560;
+  --red-glow: rgba(233, 69, 96, 0.3);
+  --blue: #4466ff;
+  --green: #44cc88;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  min-height: 100vh;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-body), Georgia, serif;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--border-glow); border-radius: 3px; }
+
+/* Background texture */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: 
+    radial-gradient(ellipse at 20% 50%, rgba(74, 63, 143, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(200, 155, 60, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(233, 69, 96, 0.04) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Chess board colors */
+.cell-light { background-color: #f0d9b5; }
+.cell-dark  { background-color: #b58863; }
+.cell-selected { background-color: #f6f669 !important; }
+.cell-valid { background-color: #cdd16f !important; }
+.cell-danger { background-color: #ff6b6b !important; }
+.cell-last-move { background-color: #cdd16f !important; opacity: 0.6; }
+
+/* Glow effects */
+.glow-gold {
+  box-shadow: 0 0 20px rgba(200, 155, 60, 0.5), 0 0 40px rgba(200, 155, 60, 0.2);
+}
+.glow-red {
+  box-shadow: 0 0 20px rgba(233, 69, 96, 0.5), 0 0 40px rgba(233, 69, 96, 0.2);
+}
+.glow-purple {
+  box-shadow: 0 0 20px rgba(136, 0, 255, 0.5), 0 0 40px rgba(136, 0, 255, 0.2);
+}
+
+/* Battle arena styles */
+.battle-arena {
+  background: radial-gradient(ellipse at center bottom, #1a0a2e 0%, #070710 70%);
+  border: 1px solid rgba(136, 0, 255, 0.3);
+}
+
+.hp-bar {
+  transition: width 0.5s ease;
+  background: linear-gradient(90deg, #ff4444, #ff8800, #00ff88);
+}
+
+/* Card styles */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.card-elevated {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-glow);
+  border-radius: 8px;
+}
+
+/* Buttons */
+.btn-primary {
+  background: linear-gradient(135deg, #c89b3c, #a07020);
+  color: #000;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.6rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(200, 155, 60, 0.4);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 0.6rem 1.5rem;
+  border: 1px solid var(--border-glow);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+.btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #e94560, #c02040);
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.6rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+}
+.btn-danger:hover { transform: translateY(-1px); }
+
+/* Input styles */
+.input {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  padding: 0.6rem 1rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.input:focus { border-color: var(--accent); }
+.input::placeholder { color: var(--text-muted); }
+
+/* Typography */
+h1, h2, h3, h4 { font-family: var(--font-display); color: var(--text-primary); }
+
+.display-title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-shadow: 0 0 30px rgba(200, 155, 60, 0.4);
+}
+
+/* Animations */
+@keyframes battleEntrance {
+  from { transform: scale(0.8) translateY(20px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+@keyframes hitFlash {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(3) saturate(0); }
+}
+
+@keyframes deathFade {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.5) rotate(15deg); }
+}
+
+@keyframes particleBurst {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.animate-battle-entrance { animation: battleEntrance 0.5s ease-out; }
+.animate-hit { animation: hitFlash 0.3s ease-out; }
+.animate-death { animation: deathFade 1s ease-out forwards; }

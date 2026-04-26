@@ -1,0 +1,63 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  email         String   @unique
+  passwordHash  String
+  avatar        String?
+  createdAt     DateTime @default(now())
+
+  wins          Int      @default(0)
+  losses        Int      @default(0)
+  draws         Int      @default(0)
+  rating        Int      @default(1200)
+
+  gamesAsWhite  Game[]   @relation("WhitePlayer")
+  gamesAsBlack  Game[]   @relation("BlackPlayer")
+
+  @@map("users")
+}
+
+model Game {
+  id          String     @id @default(cuid())
+  roomCode    String     @unique
+  status      GameStatus @default(WAITING)
+  result      GameResult?
+  
+  whiteId     String?
+  blackId     String?
+  white       User?      @relation("WhitePlayer", fields: [whiteId], references: [id])
+  black       User?      @relation("BlackPlayer", fields: [blackId], references: [id])
+
+  boardState  String     @default("") // JSON serialized board
+  currentTurn String     @default("white")
+  moveHistory String     @default("[]") // JSON array of moves
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  finishedAt  DateTime?
+
+  @@map("games")
+}
+
+enum GameStatus {
+  WAITING
+  ACTIVE
+  BATTLE
+  FINISHED
+}
+
+enum GameResult {
+  WHITE_WIN
+  BLACK_WIN
+  DRAW
+}
