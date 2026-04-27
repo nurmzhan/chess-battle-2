@@ -1,4 +1,3 @@
-export const dynamic = 'force-dynamic';
 'use client';
 // src/app/game/[code]/page.tsx
 import { useEffect, useState, useCallback, useRef } from 'react';
