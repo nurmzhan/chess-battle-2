@@ -240,6 +240,7 @@ for (let i = s.myBullets.length - 1; i >= 0; i--) {
       const LERP = 0.2;
       s.tx += (s.targetTx - s.tx) * LERP;
       s.ty += (s.targetTy - s.ty) * LERP;
+      
       // ── Draw ──
       ctx.clearRect(0, 0, ARENA_W, ARENA_H);
       drawArena(ctx);
