@@ -123,7 +123,10 @@ export function TopDownBattle({ attackerPiece, defenderPiece, myRole, onSnapshot
     s.tangle = theirSnap.angle;
 
     // Their HP is what THEY report — they took hits from our bullets on their machine
-    s.thp = theirSnap.hp;
+    s.tx = theirSnap.x;
+    s.ty = theirSnap.y;
+    s.tangle = theirSnap.angle;
+
 
     // Their bullets — we'll apply damage to ourselves locally
     s.theirBullets = (remoteSnapshot.bullets ?? []).filter(b => b.owner !== myRole);
