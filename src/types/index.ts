@@ -104,12 +104,14 @@ export interface UserStats {
 }
 
 export interface Bullet {
-  id: string;
+  id: number;          // uid() возвращает number
   x: number;
   y: number;
   vx: number;
   vy: number;
   owner: 'attacker' | 'defender';
+  damage: number;      // нужно для нанесения урона
+  life: number;        // нужно для удаления пули
 }
 
 export interface BattleSnapshot {
