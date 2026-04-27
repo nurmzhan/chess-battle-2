@@ -198,42 +198,30 @@ export function TopDownBattle({ attackerPiece, defenderPiece, myRole, onSnapshot
       }
 
       // ── My bullets move & hit obstacles ──
-      for (let i = s.myBullets.length - 1; i >= 0; i--) {
-        const b = s.myBullets[i];
-        b.x += b.vx; b.y += b.vy; b.life--;
-        if (b.x < WALL || b.x > ARENA_W - WALL || b.y < WALL || b.y > ARENA_H - WALL || b.life <= 0) {
-          s.myBullets.splice(i, 1); continue;
-        }
-        if (hitsObstacle(b.x, b.y, 5)) {
-          spawnP(s, b.x, b.y, '#94a3b8'); s.myBullets.splice(i, 1);
-        }
-        // NOTE: we do NOT reduce their HP here — they do it on their side
-        // and report back via snapshot. This keeps HP authoritative per-player.
-      }
+for (let i = s.myBullets.length - 1; i >= 0; i--) {
+  const b = s.myBullets[i];
+  b.x += b.vx; b.y += b.vy; b.life--;
+  if (b.x < WALL || b.x > ARENA_W - WALL || b.y < WALL || b.y > ARENA_H - WALL || b.life <= 0) {
+    s.myBullets.splice(i, 1); continue;
+  }
+  if (hitsObstacle(b.x, b.y, 5)) {
+    spawnP(s, b.x, b.y, '#94a3b8'); s.myBullets.splice(i, 1); continue;
+  }
+  // ✅ Проверяем попадание по противнику локально
+  if (dist(b, { x: s.tx, y: s.ty }) < theirStats.radius + 5) {
+    s.thp = Math.max(0, s.thp - b.damage);
+    spawnP(s, b.x, b.y, myRole === 'attacker' ? '#818cf8' : '#fb923c');
+    s.myBullets.splice(i, 1);
+    if (s.thp <= 0 && !s.winner) {
+      const w: 'attacker' | 'defender' = myRole;
+      s.winner = w;
+      setWinner(w);
+      setTimeout(() => onBattleEnd(w === 'attacker'), 2000);
+    }
+  }
+}
 
-      // ── Their bullets — I take damage (I am authoritative for MY hp) ──
-      for (let i = s.theirBullets.length - 1; i >= 0; i--) {
-        const b = s.theirBullets[i];
-        b.x += b.vx; b.y += b.vy; b.life--;
-        if (b.life <= 0 || b.x < WALL || b.x > ARENA_W - WALL || b.y < WALL || b.y > ARENA_H - WALL) {
-          s.theirBullets.splice(i, 1); continue;
-        }
-        if (hitsObstacle(b.x, b.y, 5)) {
-          spawnP(s, b.x, b.y, '#94a3b8'); s.theirBullets.splice(i, 1); continue;
-        }
-        if (dist(b, { x: s.mx, y: s.my }) < r + 5) {
-          s.mhp = Math.max(0, s.mhp - b.damage);
-          spawnP(s, b.x, b.y, myRole === 'attacker' ? '#a78bfa' : '#fb923c');
-          s.theirBullets.splice(i, 1);
-          if (s.mhp <= 0 && !s.winner) {
-            // I died — the other person wins
-            const w: 'attacker' | 'defender' = myRole === 'attacker' ? 'defender' : 'attacker';
-            s.winner = w;
-            setWinner(w);
-            setTimeout(() => onBattleEnd(w === 'attacker'), 2000);
-          }
-        }
-      }
+      
 
       // ── Snapshot (send MY position + MY hp + MY bullets) ──
       if (s.tick - s.lastSnapTick >= 3) {
