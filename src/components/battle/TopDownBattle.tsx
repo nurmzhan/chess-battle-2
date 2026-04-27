@@ -70,6 +70,8 @@ export function TopDownBattle({ attackerPiece, defenderPiece, myRole, onSnapshot
     mlastShot: 0,
     tx: myRole === 'attacker' ? ARENA_W - 80 : 80,
     ty: ARENA_H / 2,
+    targetTx: myRole === 'attacker' ? ARENA_W - 80 : 80,  // ✅
+    targetTy: ARENA_H / 2,                                  // ✅
     thp: 0 as number,
     tangle: myRole === 'attacker' ? Math.PI : 0,
     myBullets: [] as Bullet[],
@@ -118,13 +120,8 @@ export function TopDownBattle({ attackerPiece, defenderPiece, myRole, onSnapshot
     if (!theirSnap) return;
 
     // Update their visual position and angle
-    s.tx = theirSnap.x;
-    s.ty = theirSnap.y;
-    s.tangle = theirSnap.angle;
-
-    // Their HP is what THEY report — they took hits from our bullets on their machine
-    s.tx = theirSnap.x;
-    s.ty = theirSnap.y;
+    s.targetTx = theirSnap.x;
+    s.targetTy = theirSnap.y;
     s.tangle = theirSnap.angle;
 
 
@@ -239,7 +236,10 @@ for (let i = s.myBullets.length - 1; i >= 0; i--) {
           tick: s.tick,
         });
       }
-
+      // ── Интерполяция позиции противника ──
+      const LERP = 0.2;
+      s.tx += (s.targetTx - s.tx) * LERP;
+      s.ty += (s.targetTy - s.ty) * LERP;
       // ── Draw ──
       ctx.clearRect(0, 0, ARENA_W, ARENA_H);
       drawArena(ctx);
