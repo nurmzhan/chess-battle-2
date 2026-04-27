@@ -1,3 +1,4 @@
+// src/lib/prisma.ts
 import { PrismaClient } from '@prisma/client';
 
 const globalForPrisma = globalThis as unknown as {
@@ -5,7 +6,13 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-  const url = process.env.DATABASE_URL!;
+  const url = process.env.DATABASE_URL;
+  
+  // Во время билда DATABASE_URL может быть undefined
+  if (!url) {
+    return new PrismaClient();
+  }
+  
   const separator = url.includes('?') ? '&' : '?';
   return new PrismaClient({
     datasources: {
