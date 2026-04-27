@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { Piece, PieceType } from '@/types';
-
+import { Bullet, BattleSnapshot } from '@/types';
 const PIECE_STATS: Record<PieceType, {
   hp: number; speed: number; bulletSpeed: number;
   fireRate: number; damage: number; radius: number; emoji: string;
@@ -27,17 +27,8 @@ const OBSTACLES = [
 ];
 
 interface Vec2 { x: number; y: number; }
-interface Bullet {
-  id: number; x: number; y: number; vx: number; vy: number;
-  owner: 'attacker' | 'defender'; damage: number; life: number;
-}
-interface BattleSnapshot {
-  attacker: { x: number; y: number; hp: number; angle: number };
-  defender: { x: number; y: number; hp: number; angle: number };
-  bullets: Bullet[];
-  winner: 'attacker' | 'defender' | null;
-  tick: number;
-}
+
+
 interface Props {
   attackerPiece: Piece;
   defenderPiece: Piece;

@@ -5,14 +5,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-interface BattleSnapshot {
-  attacker: { x: number; y: number; hp: number; angle: number };
-  defender: { x: number; y: number; hp: number; angle: number };
-  bullets: unknown[];
-  winner: 'attacker' | 'defender' | null;
-  tick: number;
-}
 
+import { BattleSnapshot } from '@/types';
 export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender') {
   const [remoteSnapshot, setRemoteSnapshot] = useState<BattleSnapshot | null>(null);
   const lastTickRef = useRef(0);

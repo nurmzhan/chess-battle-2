@@ -102,3 +102,19 @@ export interface UserStats {
   rating: number;
   winRate: number;
 }
+
+export interface Bullet {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+}
+
+export interface BattleSnapshot {
+  attacker: { x: number; y: number; hp: number; angle: number };
+  defender: { x: number; y: number; hp: number; angle: number };
+  bullets: Bullet[];
+  winner: 'attacker' | 'defender' | null;
+  tick: number;
+}

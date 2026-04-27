@@ -5,14 +5,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-interface BattleSnapshot {
-  attacker?: unknown;
-  defender?: unknown;
-  bullets?: unknown[];
-  winner?: string | null;
-  tick?: number;
-}
 
+
+import { BattleSnapshot } from '@/types';
 // In-memory store: roomCode → merged snapshot
 const battleStore = new Map<string, BattleSnapshot>();
 
