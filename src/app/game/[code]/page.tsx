@@ -105,7 +105,8 @@ export default function GamePage() {
 
   useEffect(() => {
     fetchGame();
-    pollRef.current = setInterval(fetchGame, 2000);
+    // 300ms polling — defender sees the move fast instead of waiting ~2s
+    pollRef.current = setInterval(fetchGame, 300);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchGame]);
 

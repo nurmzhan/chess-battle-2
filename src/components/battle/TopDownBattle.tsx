@@ -84,12 +84,17 @@ export function TopDownBattle({ attackerPiece, defenderPiece, myRole, onSnapshot
     lastSnapTick: 0,
     rafId: 0,
     particles: [] as { x: number; y: number; vx: number; vy: number; life: number; color: string }[],
+    damageNumbers: [] as { x: number; y: number; value: number; life: number; color: string; isMe: boolean }[],
+    lastThp: 0 as number,
+    lastMhp: 0 as number,
   });
 
   // Init HP after stats are known
   useEffect(() => {
     g.current.mhp = myStats.hp;
     g.current.thp = theirStats.hp;
+    g.current.lastMhp = myStats.hp;
+    g.current.lastThp = theirStats.hp;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -116,7 +121,9 @@ export function TopDownBattle({ attackerPiece, defenderPiece, myRole, onSnapshot
     if (!remoteSnapshot) return;
     const s = g.current;
     const theirKey = myRole === 'attacker' ? 'defender' : 'attacker';
+    const myKey = myRole === 'attacker' ? 'attacker' : 'defender';
     const theirSnap = remoteSnapshot[theirKey];
+    const myRemoteSnap = remoteSnapshot[myKey];
     if (!theirSnap) return;
 
     // Update their visual position and angle
@@ -124,25 +131,41 @@ export function TopDownBattle({ attackerPiece, defenderPiece, myRole, onSnapshot
     s.targetTy = theirSnap.y;
     s.tangle = theirSnap.angle;
 
+    // Sync enemy HP from remote (their authoritative value for their own HP)
+    // Only update if remote reports lower (damage taken on their side from our bullets)
+    if (theirSnap.hp < s.thp) {
+      const dmg = Math.round(s.thp - theirSnap.hp);
+      s.thp = theirSnap.hp;
+      // Damage number on enemy position
+      s.damageNumbers.push({ x: s.tx + (Math.random()-0.5)*20, y: s.ty - 20, value: dmg, life: 45, color: myRole === 'attacker' ? '#fb923c' : '#a78bfa', isMe: false });
+    }
+
+    // Sync MY HP from remote (the attacker sees their own hp reduced by their bullets on defender side — no, each is auth for own)
+    // But also: if remote sends OUR hp (they computed damage on us from their bullets), sync downward
+    if (myRemoteSnap && myRemoteSnap.hp < s.mhp) {
+      const dmg = Math.round(s.mhp - myRemoteSnap.hp);
+      s.mhp = myRemoteSnap.hp;
+      // Damage number on my position
+      s.damageNumbers.push({ x: s.mx + (Math.random()-0.5)*20, y: s.my - 20, value: dmg, life: 45, color: myRole === 'attacker' ? '#a78bfa' : '#fb923c', isMe: true });
+    }
 
     // Their bullets — we'll apply damage to ourselves locally
     s.theirBullets = (remoteSnapshot.bullets ?? []).filter(b => b.owner !== myRole);
 
     // Winner signal from remote
-    // Принимаем winner только если мы сами ещё не определили победителя
-  if (remoteSnapshot.winner && !s.winner) {
-    s.winner = remoteSnapshot.winner;
-    setWinner(remoteSnapshot.winner);
-    setTimeout(() => onBattleEnd(remoteSnapshot.winner === 'attacker'), 2000);
-  }
+    if (remoteSnapshot.winner && !s.winner) {
+      s.winner = remoteSnapshot.winner;
+      setWinner(remoteSnapshot.winner);
+      setTimeout(() => onBattleEnd(remoteSnapshot.winner === 'attacker'), 2000);
+    }
 
-  // Если их HP по нашим данным <= 0 — форсируем победу
-  if (s.thp <= 0 && !s.winner) {
-    const w: 'attacker' | 'defender' = myRole;
-    s.winner = w;
-    setWinner(w);
-    setTimeout(() => onBattleEnd(w === 'attacker'), 2000);
-  }
+    // If their HP as we see it <= 0 — force win
+    if (s.thp <= 0 && !s.winner) {
+      const w: 'attacker' | 'defender' = myRole;
+      s.winner = w;
+      setWinner(w);
+      setTimeout(() => onBattleEnd(w === 'attacker'), 2000);
+    }
   }, [remoteSnapshot, myRole, onBattleEnd]);
 
   // ── Input ──
@@ -218,8 +241,11 @@ for (let i = s.myBullets.length - 1; i >= 0; i--) {
   }
   // ✅ Проверяем попадание по противнику локально
   if (dist(b, { x: s.tx, y: s.ty }) < theirStats.radius + 5) {
-    s.thp = Math.max(0, s.thp - b.damage);
+    const dmg = b.damage;
+    s.thp = Math.max(0, s.thp - dmg);
     spawnP(s, b.x, b.y, myRole === 'attacker' ? '#818cf8' : '#fb923c');
+    // Damage number
+    s.damageNumbers.push({ x: s.tx + (Math.random()-0.5)*20, y: s.ty - 20, value: dmg, life: 45, color: myRole === 'attacker' ? '#fb923c' : '#a78bfa', isMe: false });
     s.myBullets.splice(i, 1);
     if (s.thp <= 0 && !s.winner) {
       const w: 'attacker' | 'defender' = myRole;
@@ -230,11 +256,37 @@ for (let i = s.myBullets.length - 1; i >= 0; i--) {
   }
 }
 
-      
-//уысу
-      // ── Snapshot (send MY position + MY hp + MY bullets) ──
+      // ── Their bullets: move, hit walls/obstacles, apply damage to ME ──
+      for (let i = s.theirBullets.length - 1; i >= 0; i--) {
+        const b = s.theirBullets[i];
+        b.x += b.vx; b.y += b.vy; b.life--;
+        if (b.x < WALL || b.x > ARENA_W - WALL || b.y < WALL || b.y > ARENA_H - WALL || b.life <= 0) {
+          s.theirBullets.splice(i, 1); continue;
+        }
+        if (hitsObstacle(b.x, b.y, 5)) {
+          spawnP(s, b.x, b.y, '#94a3b8'); s.theirBullets.splice(i, 1); continue;
+        }
+        if (dist(b, { x: s.mx, y: s.my }) < myStats.radius + 5) {
+          const dmg = b.damage;
+          s.mhp = Math.max(0, s.mhp - dmg);
+          spawnP(s, b.x, b.y, myRole === 'attacker' ? '#a78bfa' : '#fb923c');
+          // Red damage number on ME
+          s.damageNumbers.push({ x: s.mx + (Math.random()-0.5)*20, y: s.my - 20, value: dmg, life: 45, color: '#f87171', isMe: true });
+          s.theirBullets.splice(i, 1);
+          if (s.mhp <= 0 && !s.winner) {
+            const w: 'attacker' | 'defender' = myRole === 'attacker' ? 'defender' : 'attacker';
+            s.winner = w;
+            setWinner(w);
+            setTimeout(() => onBattleEnd(w === 'attacker'), 2000);
+          }
+        }
+      }
+
+      // ── Snapshot: send MY position + MY hp + THEIR hp (as seen by me) + MY bullets ──
+      // Both players include theirHp so each screen shows the correct enemy health
       if (s.tick - s.lastSnapTick >= 3) {
         s.lastSnapTick = s.tick;
+        // mySnap: my real hp. theirSnap: their hp as computed on MY machine (I applied damage from my bullets)
         const mySnap = { x: s.mx, y: s.my, hp: s.mhp, angle: s.mangle };
         const theirSnap = { x: s.tx, y: s.ty, hp: s.thp, angle: s.tangle };
         onSnapshot({
@@ -255,6 +307,7 @@ for (let i = s.myBullets.length - 1; i >= 0; i--) {
       drawArena(ctx);
       drawObstacles(ctx);
       drawParticles(ctx, s);
+      drawDamageNumbers(ctx, s);
       [...s.theirBullets, ...s.myBullets].forEach(b => drawBullet(ctx, b));
       drawFighter(ctx, s.tx, s.ty, s.thp, theirStats.hp, s.tangle, theirStats.radius,
         theirStats.emoji, myRole === 'attacker' ? '#818cf8' : '#f97316', false);
@@ -330,6 +383,25 @@ for (let i = s.myBullets.length - 1; i >= 0; i--) {
 }
 
 // ── Pure draw helpers (no React) ──────────────────────────────────────────────
+
+function drawDamageNumbers(ctx: CanvasRenderingContext2D, s: any) {
+  for (let i = s.damageNumbers.length - 1; i >= 0; i--) {
+    const d = s.damageNumbers[i];
+    const alpha = d.life / 45;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = `bold ${d.isMe ? 16 : 18}px monospace`;
+    ctx.fillStyle = d.color;
+    ctx.textAlign = 'center';
+    ctx.shadowColor = d.color;
+    ctx.shadowBlur = 8;
+    ctx.fillText(`-${d.value}`, d.x, d.y);
+    ctx.restore();
+    d.y -= 1.2; // float upward
+    d.life--;
+    if (d.life <= 0) s.damageNumbers.splice(i, 1);
+  }
+}
 
 function spawnP(s: any, x: number, y: number, color: string) {
   for (let i = 0; i < 8; i++) {

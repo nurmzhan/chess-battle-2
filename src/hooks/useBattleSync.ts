@@ -34,11 +34,11 @@ export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender')
       } catch { /* ignore */ }
       isSendingRef.current = false;
     };
-    const iv = setInterval(flush, 80);
+    const iv = setInterval(flush, 50);
     return () => clearInterval(iv);
   }, [roomCode, myRole]);
 
-  // Receiver: poll remote snapshot
+  // Receiver: poll remote snapshot — 50ms for real-time HP/damage visibility
   useEffect(() => {
     const poll = async () => {
       try {
@@ -52,7 +52,7 @@ export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender')
         }
       } catch { /* ignore */ }
     };
-    const iv = setInterval(poll, 100);
+    const iv = setInterval(poll, 50);
     return () => clearInterval(iv);
   }, [roomCode]);
 
