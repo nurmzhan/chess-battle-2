@@ -4,6 +4,7 @@ const nextConfig = {
   images: {
     domains: ['localhost'],
   },
+  serverExternalPackages: ['bcryptjs'],
 }
 
 module.exports = nextConfig
