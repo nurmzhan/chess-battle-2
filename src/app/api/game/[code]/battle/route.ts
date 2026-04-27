@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 // src/app/api/game/[code]/battle/route.ts
 // Lightweight battle state store: keeps latest snapshot per role.
 // Uses a simple in-memory Map per room (resets on server restart,
