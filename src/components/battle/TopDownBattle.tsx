@@ -222,7 +222,7 @@ for (let i = s.myBullets.length - 1; i >= 0; i--) {
 }
 
       
-
+//уысу
       // ── Snapshot (send MY position + MY hp + MY bullets) ──
       if (s.tick - s.lastSnapTick >= 3) {
         s.lastSnapTick = s.tick;
