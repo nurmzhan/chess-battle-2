@@ -129,11 +129,20 @@ export function TopDownBattle({ attackerPiece, defenderPiece, myRole, onSnapshot
     s.theirBullets = (remoteSnapshot.bullets ?? []).filter(b => b.owner !== myRole);
 
     // Winner signal from remote
-    if (remoteSnapshot.winner && !s.winner) {
-      s.winner = remoteSnapshot.winner;
-      setWinner(remoteSnapshot.winner);
-      setTimeout(() => onBattleEnd(remoteSnapshot.winner === 'attacker'), 2000);
-    }
+    // Принимаем winner только если мы сами ещё не определили победителя
+  if (remoteSnapshot.winner && !s.winner) {
+    s.winner = remoteSnapshot.winner;
+    setWinner(remoteSnapshot.winner);
+    setTimeout(() => onBattleEnd(remoteSnapshot.winner === 'attacker'), 2000);
+  }
+
+  // Если их HP по нашим данным <= 0 — форсируем победу
+  if (s.thp <= 0 && !s.winner) {
+    const w: 'attacker' | 'defender' = myRole;
+    s.winner = w;
+    setWinner(w);
+    setTimeout(() => onBattleEnd(w === 'attacker'), 2000);
+  }
   }, [remoteSnapshot, myRole, onBattleEnd]);
 
   // ── Input ──
@@ -240,7 +249,7 @@ for (let i = s.myBullets.length - 1; i >= 0; i--) {
       const LERP = 0.2;
       s.tx += (s.targetTx - s.tx) * LERP;
       s.ty += (s.targetTy - s.ty) * LERP;
-      
+
       // ── Draw ──
       ctx.clearRect(0, 0, ARENA_W, ARENA_H);
       drawArena(ctx);
