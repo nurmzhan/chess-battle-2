@@ -109,6 +109,7 @@ export interface Bullet {
   y: number;
   vx: number;
   vy: number;
+  owner: 'attacker' | 'defender';
 }
 
 export interface BattleSnapshot {
