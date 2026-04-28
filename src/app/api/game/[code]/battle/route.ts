@@ -42,3 +42,12 @@ export async function GET(
   const snap = battleStore.get(params.code) ?? null;
   return NextResponse.json({ snapshot: snap });
 }
+
+// DELETE /api/game/[code]/battle — clear battle state for new battle
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { code: string } }
+) {
+  battleStore.delete(params.code);
+  return NextResponse.json({ ok: true });
+}

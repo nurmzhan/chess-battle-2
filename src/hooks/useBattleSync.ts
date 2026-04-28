@@ -22,6 +22,11 @@ export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender')
   const pendingRef = useRef<PlayerSnap | null>(null);
   const isSendingRef = useRef(false);
 
+  // Reset tick counter whenever roomCode or role changes (new battle session)
+  useEffect(() => {
+    lastTickRef.current = 0;
+  }, [roomCode, myRole]);
+
   // Push my snapshot to DB every ~100ms (throttled)
   // Accepts PlayerSnap (my own position/state) and wraps it into the role field
   const pushSnapshot = useCallback((snap: PlayerSnap) => {

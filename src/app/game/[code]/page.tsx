@@ -45,6 +45,7 @@ export default function GamePage() {
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [boardState, setBoardState] = useState<BoardState>(initialBoardState());
   const [battle, setBattle] = useState<{ attacker: Piece; defender: Piece } | null>(null);
+  const [battleKey, setBattleKey] = useState(0);
   const [pendingMove, setPendingMove] = useState<{ piece: Piece; to: Square } | null>(null);
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,6 +91,7 @@ export default function GamePage() {
             const amIDefender = myColorRef.current !== parsed.currentTurn;
             if (amIDefender) {
               myRoleRef.current = 'defender'; // Я не хожу — значит я защищающийся
+              setBattleKey(k => k + 1);
               setPendingMove({
                 piece: parsed.battlePieces.attacker,
                 to: { row: parsed.battlePieces.defender.row, col: parsed.battlePieces.defender.col }
@@ -161,6 +163,9 @@ export default function GamePage() {
         if (target && target.color !== movingPiece.color) {
           // BATTLE — сигнал обоим игрокам через БД
           myRoleRef.current = 'attacker'; // Я хожу — значит я атакующий
+          // Clear old battle state from server before starting new battle
+          fetch(`/api/game/${code}/battle`, { method: 'DELETE' });
+          setBattleKey(k => k + 1);
           setPendingMove({ piece: movingPiece, to: { row, col } });
           setBattle({ attacker: movingPiece, defender: target });
           setBoardState(prev => ({ ...prev, selectedSquare: null, validMoves: [] }));
@@ -446,6 +451,7 @@ export default function GamePage() {
       {battle && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#020617' }}>
           <TopDownBattle
+            key={battleKey}
             attackerPiece={battle.attacker}
             defenderPiece={battle.defender}
             myRole={myRoleRef.current}
