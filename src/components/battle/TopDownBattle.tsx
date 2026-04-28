@@ -169,8 +169,9 @@ export function TopDownBattle({
       triggerEnd(s, remoteSnap.winner);
     }
 
-    // Their HP hit 0 per their own report
-    if (remoteSnap.hp <= 0 && !s.winner) {
+    // Their HP hit 0 per their own report — only trigger if battle actually started
+    // (thp > 0 means we've received valid HP data before, not just API defaults)
+    if (remoteSnap.hp <= 0 && s.thp > 0 && !s.winner) {
       triggerEnd(s, myRole); // I win
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

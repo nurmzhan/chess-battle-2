@@ -93,7 +93,10 @@ export default function GamePage() {
             }
           }
 
-          setBoardState(prev => ({ ...parsed, selectedSquare: null, validMoves: [] }));
+          // Don't overwrite local state while a battle is in progress or just finished
+          if (!battleRef.current) {
+            setBoardState(prev => ({ ...parsed, selectedSquare: null, validMoves: [] }));
+          }
         } catch {}
       }
 
@@ -222,7 +225,8 @@ export default function GamePage() {
         const { newPieces: np } = applyMove(pieces, piece, to);
         newPieces = np;
       } else {
-        newPieces = pieces;
+        // Defender wins: attacker dies — remove the attacker piece from the board
+        newPieces = pieces.filter(p => !(p.row === piece.row && p.col === piece.col));
       }
 
       const newStatus = isCheckmate(newPieces, nextTurn) ? 'checkmate'
@@ -437,13 +441,20 @@ export default function GamePage() {
             defenderPiece={battle.defender}
             myRole={myRole}
             onSnapshot={pushSnapshot}
-            remoteSnap={remoteSnapshot ? {
+            remoteSnap={(() => {
+              if (!remoteSnapshot) return null;
               // Extract the opponent's data from the merged BattleSnapshot
-              ...(myRole === 'attacker' ? remoteSnapshot.defender : remoteSnapshot.attacker),
-              bullets: remoteSnapshot.bullets,
-              winner: remoteSnapshot.winner,
-              tick: remoteSnapshot.tick,
-            } : null}
+              const opponentData = myRole === 'attacker' ? remoteSnapshot.defender : remoteSnapshot.attacker;
+              // Guard: if opponent hasn't sent any data yet (hp=0, x=0, y=0), treat as no snapshot
+              // to avoid instant battle-end from empty API store defaults
+              if (!opponentData || (opponentData.hp === 0 && opponentData.x === 0 && opponentData.y === 0)) return null;
+              return {
+                ...opponentData,
+                bullets: remoteSnapshot.bullets,
+                winner: remoteSnapshot.winner,
+                tick: remoteSnapshot.tick,
+              };
+            })()}
             onBattleEnd={handleBattleEnd}
           />
         </div>
