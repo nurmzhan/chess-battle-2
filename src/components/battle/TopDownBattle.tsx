@@ -65,6 +65,8 @@ let _bid = 0;
 const uid = () => (++_bid) & 0xfffff; // wrap to avoid huge numbers
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const dist = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y);
+const isPlayerReady = (p: { x: number; y: number; hp: number }) =>
+  !(p.hp === 0 && p.x === 0 && p.y === 0);
 
 function hitsObstacle(x: number, y: number, r: number) {
   for (const o of OBSTACLES) {
@@ -149,7 +151,7 @@ export function TopDownBattle({
     const theirData = myRole === 'attacker' ? battleSnap.defender : battleSnap.attacker;
     const bullets = battleSnap.bullets ?? [];
 
-    if (theirData && !(theirData.hp === 0 && theirData.x === 0 && theirData.y === 0)) {
+    if (theirData && isPlayerReady(theirData)) {
       s.targetTx = theirData.x;
       s.targetTy = theirData.y;
       s.tangle = theirData.angle;
@@ -167,7 +169,7 @@ export function TopDownBattle({
       s.thp = theirData.hp;
     }
 
-    if (myData && !(myData.hp === 0 && myData.x === 0 && myData.y === 0)) {
+    if (myData && isPlayerReady(myData)) {
       if (myData.hp < s.mhp) {
         const dmg = Math.round(s.mhp - myData.hp);
         spawnParticles(s, s.mx, s.my, '#f87171');
@@ -184,10 +186,14 @@ export function TopDownBattle({
 
     s.theirBullets = bullets.filter(b => b.owner !== myRole).map(b => ({ ...b }));
 
-    if (battleSnap.attacker.hp <= 0 && battleSnap.defender.hp > 0) {
-      triggerEnd(s, 'defender');
-    } else if (battleSnap.defender.hp <= 0 && battleSnap.attacker.hp > 0) {
-      triggerEnd(s, 'attacker');
+    const bothPlayersStarted =
+      isPlayerReady(battleSnap.attacker) && isPlayerReady(battleSnap.defender);
+    if (bothPlayersStarted) {
+      if (battleSnap.attacker.hp <= 0 && battleSnap.defender.hp > 0) {
+        triggerEnd(s, 'defender');
+      } else if (battleSnap.defender.hp <= 0 && battleSnap.attacker.hp > 0) {
+        triggerEnd(s, 'attacker');
+      }
     }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
