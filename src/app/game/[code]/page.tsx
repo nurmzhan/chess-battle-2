@@ -54,8 +54,11 @@ export default function GamePage() {
   const lastBoardRef = useRef('');
   const battleRef = useRef<{ attacker: Piece; defender: Piece } | null>(null);
   const myColorRef = useRef<string | null>(null);
+  const myRoleRef = useRef<'attacker' | 'defender'>('defender');
+  const pendingMoveRef = useRef<{ piece: Piece; to: Square } | null>(null);
 
   useEffect(() => { battleRef.current = battle; }, [battle]);
+  useEffect(() => { pendingMoveRef.current = pendingMove; }, [pendingMove]);
 
   const userId = (session?.user as any)?.id;
   const myColor = gameData?.white?.id === userId ? 'white'
@@ -64,8 +67,9 @@ export default function GamePage() {
   useEffect(() => { myColorRef.current = myColor; }, [myColor]);
 
   const isMyTurn = myColor === boardState.currentTurn;
+  // myRole вычисляется динамически, но фиксируется в ref при старте битвы
   const myRole: 'attacker' | 'defender' = myColor === boardState.currentTurn ? 'attacker' : 'defender';
-  const { remoteSnapshot, pushSnapshot } = useBattleSync(code, myRole);
+  const { remoteSnapshot, pushSnapshot } = useBattleSync(code, myRoleRef.current);
 
   // Fetch game data
   const fetchGame = useCallback(async () => {
@@ -85,6 +89,7 @@ export default function GamePage() {
           if (parsed.status === 'battle' && parsed.battlePieces && !battleRef.current) {
             const amIDefender = myColorRef.current !== parsed.currentTurn;
             if (amIDefender) {
+              myRoleRef.current = 'defender'; // Я не хожу — значит я защищающийся
               setPendingMove({
                 piece: parsed.battlePieces.attacker,
                 to: { row: parsed.battlePieces.defender.row, col: parsed.battlePieces.defender.col }
@@ -155,6 +160,7 @@ export default function GamePage() {
 
         if (target && target.color !== movingPiece.color) {
           // BATTLE — сигнал обоим игрокам через БД
+          myRoleRef.current = 'attacker'; // Я хожу — значит я атакующий
           setPendingMove({ piece: movingPiece, to: { row, col } });
           setBattle({ attacker: movingPiece, defender: target });
           setBoardState(prev => ({ ...prev, selectedSquare: null, validMoves: [] }));
@@ -212,7 +218,7 @@ export default function GamePage() {
 
   // Battle ended — fixes piece bug by reading fresh state via setBoardState callback
   const handleBattleEnd = useCallback((attackerWon: boolean) => {
-    const pending = pendingMove;
+    const pending = pendingMoveRef.current;
     if (!pending) return;
     const { piece, to } = pending;
 
@@ -222,11 +228,13 @@ export default function GamePage() {
 
       let newPieces: Piece[];
       if (attackerWon) {
-        const { newPieces: np } = applyMove(pieces, piece, to);
-        newPieces = np;
+        // Атакующий победил: убираем защитника, перемещаем атакующего на его место
+        newPieces = pieces
+          .filter(p => !(p.row === to.row && p.col === to.col)) // убрать защитника
+          .map(p => p.id === piece.id ? { ...p, row: to.row, col: to.col, hasMoved: true } : p); // переместить атакующего
       } else {
-        // Defender wins: attacker dies — remove the attacker piece from the board
-        newPieces = pieces.filter(p => !(p.row === piece.row && p.col === piece.col));
+        // Защитник победил: убираем атакующего, защитник остаётся на месте
+        newPieces = pieces.filter(p => p.id !== piece.id);
       }
 
       const newStatus = isCheckmate(newPieces, nextTurn) ? 'checkmate'
@@ -253,7 +261,8 @@ export default function GamePage() {
 
     setBattle(null);
     setPendingMove(null);
-  }, [pendingMove, saveBoardState, finishGame]);
+    pendingMoveRef.current = null;
+  }, [saveBoardState, finishGame]);
 
   const copyCode = () => {
     navigator.clipboard.writeText(code);
@@ -439,12 +448,12 @@ export default function GamePage() {
           <TopDownBattle
             attackerPiece={battle.attacker}
             defenderPiece={battle.defender}
-            myRole={myRole}
+            myRole={myRoleRef.current}
             onSnapshot={pushSnapshot}
             remoteSnap={(() => {
               if (!remoteSnapshot) return null;
               // Extract the opponent's data from the merged BattleSnapshot
-              const opponentData = myRole === 'attacker' ? remoteSnapshot.defender : remoteSnapshot.attacker;
+              const opponentData = myRoleRef.current === 'attacker' ? remoteSnapshot.defender : remoteSnapshot.attacker;
               // Guard: if opponent hasn't sent any data yet (hp=0, x=0, y=0), treat as no snapshot
               // to avoid instant battle-end from empty API store defaults
               if (!opponentData || (opponentData.hp === 0 && opponentData.x === 0 && opponentData.y === 0)) return null;
