@@ -4,6 +4,10 @@
 
 Multiplayer chess where piece captures trigger roguelite 2D battles. The attacker only wins the square if they defeat the defender in combat!
 
+## Known Issues
+
+В проекте пока есть баги, о которых я знаю: синхронизация 2D-битв между двумя игроками иногда работает нестабильно, попадания пуль могут засчитываться не всегда корректно, а после боя состояние фигур на доске может обновляться неидеально. Я пытался это исправить, но из-за дедлайна не успел довести сетевую часть и battle-sync до полностью стабильного состояния.
+
 ## Features
 
 - ♟ **Full Chess Rules** — castling, check, checkmate, stalemate
