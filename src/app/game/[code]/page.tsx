@@ -221,48 +221,51 @@ export default function GamePage() {
     }
   }, [boardState, isMyTurn, gameData, saveBoardState, finishGame, code]);
 
-  // Battle ended — fixes piece bug by reading fresh state via setBoardState callback
+  // Battle ended — only attacker applies and saves result; defender waits for polling
   const handleBattleEnd = useCallback((attackerWon: boolean) => {
     const pending = pendingMoveRef.current;
-    if (!pending) return;
+    if (!pending) { setBattle(null); return; }
     const { piece, to } = pending;
 
-    setBoardState(prev => {
-      const { pieces, currentTurn, moveHistory } = prev;
-      const nextTurn = currentTurn === 'white' ? 'black' : 'white';
+    const isAttacker = myRoleRef.current === 'attacker';
 
-      let newPieces: Piece[];
-      if (attackerWon) {
-        // Атакующий победил: убираем защитника, перемещаем атакующего на его место
-        newPieces = pieces
-          .filter(p => !(p.row === to.row && p.col === to.col)) // убрать защитника
-          .map(p => p.id === piece.id ? { ...p, row: to.row, col: to.col, hasMoved: true } : p); // переместить атакующего
-      } else {
-        // Защитник победил: убираем атакующего, защитник остаётся на месте
-        newPieces = pieces.filter(p => p.id !== piece.id);
-      }
+    if (isAttacker) {
+      setBoardState(prev => {
+        const { pieces, currentTurn, moveHistory } = prev;
+        const nextTurn = currentTurn === 'white' ? 'black' : 'white';
 
-      const newStatus = isCheckmate(newPieces, nextTurn) ? 'checkmate'
-        : isStalemate(newPieces, nextTurn) ? 'stalemate'
-        : isInCheck(newPieces, nextTurn) ? 'check'
-        : 'playing';
+        let newPieces: Piece[];
+        if (attackerWon) {
+          newPieces = pieces
+            .filter(p => !(p.row === to.row && p.col === to.col))
+            .map(p => p.id === piece.id ? { ...p, row: to.row, col: to.col, hasMoved: true } : p);
+        } else {
+          newPieces = pieces.filter(p => p.id !== piece.id);
+        }
 
-      const newState: BoardState = {
-        pieces: newPieces,
-        currentTurn: nextTurn,
-        moveHistory,
-        status: newStatus as any,
-        selectedSquare: null,
-        validMoves: [],
-      };
+        const newStatus = isCheckmate(newPieces, nextTurn) ? 'checkmate'
+          : isStalemate(newPieces, nextTurn) ? 'stalemate'
+          : isInCheck(newPieces, nextTurn) ? 'check'
+          : 'playing';
 
-      if (attackerWon) setLastMove({ from: { row: piece.row, col: piece.col }, to });
-      saveBoardState(newState);
-      if (newStatus === 'checkmate') finishGame(nextTurn === 'black' ? 'WHITE_WIN' : 'BLACK_WIN');
-      else if (newStatus === 'stalemate') finishGame('DRAW');
+        const newState: BoardState = {
+          pieces: newPieces,
+          currentTurn: nextTurn,
+          moveHistory,
+          status: newStatus as any,
+          selectedSquare: null,
+          validMoves: [],
+        };
 
-      return newState;
-    });
+        if (attackerWon) setLastMove({ from: { row: piece.row, col: piece.col }, to });
+        saveBoardState(newState);
+        if (newStatus === 'checkmate') finishGame(nextTurn === 'black' ? 'WHITE_WIN' : 'BLACK_WIN');
+        else if (newStatus === 'stalemate') finishGame('DRAW');
+
+        return newState;
+      });
+    }
+    // Defender: just clear battle state — polling will update board from attacker's save
 
     setBattle(null);
     setPendingMove(null);

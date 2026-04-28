@@ -140,7 +140,15 @@ export function TopDownBattle({
   useEffect(() => {
     if (!remoteSnap) return;
     const s = g.current;
-    if (s.winner) return; // battle already decided locally
+
+    // Always accept remote winner — even if we think we already won
+    // This prevents one player getting stuck when the other already exited
+    if (remoteSnap.winner && !endCalledRef.current) {
+      triggerEnd(s, remoteSnap.winner);
+      return;
+    }
+
+    if (s.winner) return; // battle already decided locally, skip position updates
 
     // Update their visual position
     s.targetTx = remoteSnap.x;
@@ -161,19 +169,8 @@ export function TopDownBattle({
     }
 
     // Their bullets — replace array (server always sends latest set)
-    // We move them locally between remote updates for smooth rendering
     s.theirBullets = (remoteSnap.bullets ?? []).map(b => ({ ...b }));
 
-    // Winner from remote
-    if (remoteSnap.winner && !s.winner) {
-      triggerEnd(s, remoteSnap.winner);
-    }
-
-    // Their HP hit 0 per their own report — only trigger if battle actually started
-    // (thp > 0 means we've received valid HP data before, not just API defaults)
-    if (remoteSnap.hp <= 0 && s.thp > 0 && !s.winner) {
-      triggerEnd(s, myRole); // I win
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remoteSnap]);
 
