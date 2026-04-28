@@ -1,17 +1,17 @@
 export const dynamic = 'force-dynamic';
 // src/app/api/game/[code]/battle/route.ts
-// Authoritative battle state. It is stored inside game.boardState so both
-// players, and deployed server instances, read the same battle.
+// Fast battle state store. This route intentionally avoids Prisma because
+// battle sync is high-frequency and would exhaust DB connections on Vercel.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { BattleSnapshot } from '@/types';
-import { prisma } from '@/lib/prisma';
 
 type BattleRole = 'attacker' | 'defender';
 
 interface StoredBattle {
   snapshot: BattleSnapshot;
-  consumedBullets: string[];
+  consumedBullets: Set<string>;
+  updatedAt: number;
 }
 
 const EMPTY_PLAYER = { x: 0, y: 0, hp: 0, angle: 0 };
@@ -19,6 +19,7 @@ const ARENA_W = 700;
 const ARENA_H = 480;
 const WALL = 16;
 const HIT_RADIUS = 24;
+const MAX_BATTLE_AGE_MS = 5 * 60 * 1000;
 
 const OBSTACLES = [
   { x: 180, y: 150, w: 60, h: 60 },
@@ -27,6 +28,8 @@ const OBSTACLES = [
   { x: 180, y: 280, w: 60, h: 60 },
   { x: 460, y: 280, w: 60, h: 60 },
 ];
+
+const battleStore = new Map<string, StoredBattle>();
 
 const bulletKey = (owner: BattleRole, id: number) => `${owner}:${id}`;
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
@@ -42,59 +45,43 @@ function hitsObstacle(x: number, y: number, r: number) {
   return false;
 }
 
-const emptyBattle = (): StoredBattle => ({
-  snapshot: {
-    attacker: { ...EMPTY_PLAYER },
-    defender: { ...EMPTY_PLAYER },
-    bullets: [],
-    winner: null,
-    tick: 0,
-  },
-  consumedBullets: [],
-});
-
-async function readBattle(code: string) {
-  const game = await prisma.game.findUnique({
-    where: { roomCode: code },
-    select: { boardState: true },
-  });
-  if (!game) return null;
-
-  const board = JSON.parse(game.boardState || '{}');
-  const battle = (board.battleRuntime ?? emptyBattle()) as StoredBattle;
-  return { board, battle };
+function emptyBattle(): StoredBattle {
+  return {
+    snapshot: {
+      attacker: { ...EMPTY_PLAYER },
+      defender: { ...EMPTY_PLAYER },
+      bullets: [],
+      winner: null,
+      tick: 0,
+    },
+    consumedBullets: new Set<string>(),
+    updatedAt: Date.now(),
+  };
 }
 
-async function writeBattle(code: string, board: any, battle: StoredBattle | null) {
-  if (battle) {
-    board.battleRuntime = battle;
-  } else {
-    delete board.battleRuntime;
+function pruneOldBattles() {
+  const now = Date.now();
+  for (const [code, battle] of Array.from(battleStore.entries())) {
+    if (now - battle.updatedAt > MAX_BATTLE_AGE_MS) {
+      battleStore.delete(code);
+    }
   }
-
-  await prisma.game.update({
-    where: { roomCode: code },
-    data: { boardState: JSON.stringify(board), updatedAt: new Date() },
-  });
 }
 
-// POST /api/game/[code]/battle — push my role's data
 export async function POST(
   req: NextRequest,
   { params }: { params: { code: string } }
 ) {
+  pruneOldBattles();
+
   const { code } = params;
   const { role, snapshot } = await req.json() as { role: BattleRole; snapshot: Partial<BattleSnapshot> };
-
-  const loaded = await readBattle(code);
-  if (!loaded) return NextResponse.json({ error: 'Game not found' }, { status: 404 });
-
-  const { board, battle: current } = loaded;
-  const consumed = new Set(current.consumedBullets);
+  const current = battleStore.get(code) ?? emptyBattle();
   const currentSnap = current.snapshot;
   const currentBullets = currentSnap.bullets ?? [];
   const incomingBullets = (snapshot.bullets ?? [])
-    .filter(b => b.owner === role && !consumed.has(bulletKey(b.owner, b.id)));
+    .filter(b => b.owner === role && !current.consumedBullets.has(bulletKey(b.owner, b.id)));
+
   const mergedBullets = [
     ...currentBullets.filter(b => b.owner !== role),
     ...incomingBullets,
@@ -134,14 +121,14 @@ export async function POST(
         b.life <= 0 ||
         hitsObstacle(b.x, b.y, 5)
       ) {
-        consumed.add(bulletKey(b.owner, b.id));
+        current.consumedBullets.add(bulletKey(b.owner, b.id));
         return false;
       }
 
       const target = b.owner === 'attacker' ? merged.defender : merged.attacker;
       if (dist(b, target) < HIT_RADIUS) {
         target.hp = Math.max(0, target.hp - b.damage);
-        consumed.add(bulletKey(b.owner, b.id));
+        current.consumedBullets.add(bulletKey(b.owner, b.id));
         if (target.hp <= 0) {
           merged.winner = b.owner;
         }
@@ -152,31 +139,25 @@ export async function POST(
     });
   }
 
-  await writeBattle(code, board, {
-    snapshot: merged,
-    consumedBullets: Array.from(consumed).slice(-500),
-  });
+  current.snapshot = merged;
+  current.updatedAt = Date.now();
+  battleStore.set(code, current);
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, snapshot: merged });
 }
 
-// GET /api/game/[code]/battle — get full merged snapshot
 export async function GET(
   _req: NextRequest,
   { params }: { params: { code: string } }
 ) {
-  const loaded = await readBattle(params.code);
-  if (!loaded) return NextResponse.json({ error: 'Game not found' }, { status: 404 });
-  return NextResponse.json({ snapshot: loaded.battle.snapshot ?? null });
+  pruneOldBattles();
+  return NextResponse.json({ snapshot: battleStore.get(params.code)?.snapshot ?? null });
 }
 
-// DELETE /api/game/[code]/battle — clear battle state for new battle
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: { code: string } }
 ) {
-  const loaded = await readBattle(params.code);
-  if (!loaded) return NextResponse.json({ error: 'Game not found' }, { status: 404 });
-  await writeBattle(params.code, loaded.board, null);
+  battleStore.delete(params.code);
   return NextResponse.json({ ok: true });
 }

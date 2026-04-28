@@ -70,7 +70,11 @@ export default function GamePage() {
   const isMyTurn = myColor === boardState.currentTurn;
   // myRole вычисляется динамически, но фиксируется в ref при старте битвы
   const myRole: 'attacker' | 'defender' = myColor === boardState.currentTurn ? 'attacker' : 'defender';
-  const { remoteSnapshot, pushSnapshot, resetBattleSync } = useBattleSync(code, myRoleRef.current);
+  const { remoteSnapshot, pushSnapshot, resetBattleSync } = useBattleSync(
+    code,
+    myRoleRef.current,
+    !!battle
+  );
 
   // Fetch game data
   const fetchGame = useCallback(async () => {
@@ -116,8 +120,8 @@ export default function GamePage() {
 
   useEffect(() => {
     fetchGame();
-    // 300ms polling — defender sees the move fast instead of waiting ~2s
-    pollRef.current = setInterval(fetchGame, 300);
+    // Keep board polling modest; battle realtime uses /battle while a fight is active.
+    pollRef.current = setInterval(fetchGame, 1000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchGame]);
 

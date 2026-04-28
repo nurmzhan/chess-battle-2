@@ -1,7 +1,6 @@
 'use client';
 // src/hooks/useBattleSync.ts
-// Syncs battle snapshots between two players using the existing
-// game DB polling (stores snapshot in boardState.battle).
+// Syncs battle snapshots between two players through the fast battle API.
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 
@@ -16,7 +15,7 @@ interface PlayerSnap {
   tick: number;
 }
 
-export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender') {
+export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender', enabled: boolean) {
   const [remoteSnapshot, setRemoteSnapshot] = useState<BattleSnapshot | null>(null);
   const lastTickRef = useRef(0);
   const lastWinnerRef = useRef<'attacker' | 'defender' | null>(null);
@@ -30,10 +29,10 @@ export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender')
     setRemoteSnapshot(null);
   }, []);
 
-  // Reset tick counter whenever roomCode or role changes (new battle session)
+  // Reset counters whenever a battle session starts/stops or role changes.
   useEffect(() => {
     resetBattleSync();
-  }, [roomCode, myRole, resetBattleSync]);
+  }, [roomCode, myRole, enabled, resetBattleSync]);
 
   // Push my snapshot to DB every ~100ms (throttled)
   // Accepts PlayerSnap (my own position/state) and wraps it into the role field
@@ -58,20 +57,32 @@ export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender')
           winner: snap.winner,
           tick: snap.tick,
         };
-        await fetch(`/api/game/${roomCode}/battle`, {
+        const res = await fetch(`/api/game/${roomCode}/battle`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ role: myRole, snapshot: payload }),
         });
+        if (res.ok) {
+          const data = await res.json();
+          const serverSnap: BattleSnapshot | null = data.snapshot ?? null;
+          if (serverSnap) {
+            lastTickRef.current = serverSnap.tick;
+            lastWinnerRef.current = serverSnap.winner;
+            setRemoteSnapshot(serverSnap);
+          }
+        }
       } catch { /* ignore */ }
       isSendingRef.current = false;
     };
-    const iv = setInterval(flush, 50);
+    if (!enabled) return;
+    const iv = setInterval(flush, 100);
     return () => clearInterval(iv);
-  }, [roomCode, myRole]);
+  }, [roomCode, myRole, enabled]);
 
-  // Receiver: poll remote snapshot — 50ms for real-time HP/damage visibility
+  // Receiver: low-frequency backup poll. Regular POST responses carry the
+  // current authoritative snapshot, so this does not need to run rapidly.
   useEffect(() => {
+    if (!enabled) return;
     const poll = async () => {
       try {
         const res = await fetch(`/api/game/${roomCode}/battle`);
@@ -88,9 +99,9 @@ export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender')
         }
       } catch { /* ignore */ }
     };
-    const iv = setInterval(poll, 50);
+    const iv = setInterval(poll, 500);
     return () => clearInterval(iv);
-  }, [roomCode]);
+  }, [roomCode, enabled]);
 
   return { remoteSnapshot, pushSnapshot, resetBattleSync };
 }
