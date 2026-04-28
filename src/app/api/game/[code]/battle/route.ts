@@ -22,13 +22,20 @@ export async function POST(
   const { role, snapshot } = await req.json();
 
   const current = battleStore.get(code) ?? null;
-const merged: BattleSnapshot = {
-  attacker: snapshot.attacker ?? current?.attacker ?? { x: 0, y: 0, hp: 0, angle: 0 },
-  defender: snapshot.defender ?? current?.defender ?? { x: 0, y: 0, hp: 0, angle: 0 },
-  bullets: snapshot.bullets ?? current?.bullets ?? [],
-  winner: snapshot.winner ?? current?.winner ?? null,
-  tick: Math.max(snapshot.tick ?? 0, current?.tick ?? 0),
-};
+  const currentBullets = current?.bullets ?? [];
+  const incomingBullets = snapshot.bullets ?? [];
+  const mergedBullets = [
+    ...currentBullets.filter(b => b.owner !== role),
+    ...incomingBullets,
+  ];
+
+  const merged: BattleSnapshot = {
+    attacker: snapshot.attacker ?? current?.attacker ?? { x: 0, y: 0, hp: 0, angle: 0 },
+    defender: snapshot.defender ?? current?.defender ?? { x: 0, y: 0, hp: 0, angle: 0 },
+    bullets: mergedBullets,
+    winner: snapshot.winner ?? current?.winner ?? null,
+    tick: Math.max(snapshot.tick ?? 0, current?.tick ?? 0),
+  };
   battleStore.set(code, merged);
 
   return NextResponse.json({ ok: true });

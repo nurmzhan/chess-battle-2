@@ -70,7 +70,7 @@ export default function GamePage() {
   const isMyTurn = myColor === boardState.currentTurn;
   // myRole вычисляется динамически, но фиксируется в ref при старте битвы
   const myRole: 'attacker' | 'defender' = myColor === boardState.currentTurn ? 'attacker' : 'defender';
-  const { remoteSnapshot, pushSnapshot } = useBattleSync(code, myRoleRef.current);
+  const { remoteSnapshot, pushSnapshot, resetBattleSync } = useBattleSync(code, myRoleRef.current);
 
   // Fetch game data
   const fetchGame = useCallback(async () => {
@@ -91,6 +91,7 @@ export default function GamePage() {
             const amIDefender = myColorRef.current !== parsed.currentTurn;
             if (amIDefender) {
               myRoleRef.current = 'defender'; // Я не хожу — значит я защищающийся
+              resetBattleSync();
               setBattleKey(k => k + 1);
               setPendingMove({
                 piece: parsed.battlePieces.attacker,
@@ -111,7 +112,7 @@ export default function GamePage() {
     } catch {
       setError('Failed to load game');
     }
-  }, [code]);
+  }, [code, resetBattleSync]);
 
   useEffect(() => {
     fetchGame();
@@ -147,7 +148,7 @@ export default function GamePage() {
   }, [code]);
 
   // Handle square click
-  const handleSquareClick = useCallback((row: number, col: number) => {
+  const handleSquareClick = useCallback(async (row: number, col: number) => {
     if (!isMyTurn || battleRef.current || gameData?.status === 'FINISHED') return;
 
     const { pieces, selectedSquare, currentTurn } = boardState;
@@ -164,7 +165,8 @@ export default function GamePage() {
           // BATTLE — сигнал обоим игрокам через БД
           myRoleRef.current = 'attacker'; // Я хожу — значит я атакующий
           // Clear old battle state from server before starting new battle
-          fetch(`/api/game/${code}/battle`, { method: 'DELETE' });
+          resetBattleSync();
+          await fetch(`/api/game/${code}/battle`, { method: 'DELETE' });
           setBattleKey(k => k + 1);
           setPendingMove({ piece: movingPiece, to: { row, col } });
           setBattle({ attacker: movingPiece, defender: target });
@@ -178,7 +180,7 @@ export default function GamePage() {
             battlePieces: { attacker: movingPiece, defender: target },
           });
           lastBoardRef.current = battleSignal;
-          fetch(`/api/game/${code}`, {
+          await fetch(`/api/game/${code}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'move', boardState: battleSignal }),
@@ -219,7 +221,7 @@ export default function GamePage() {
     } else {
       setBoardState(prev => ({ ...prev, selectedSquare: null, validMoves: [] }));
     }
-  }, [boardState, isMyTurn, gameData, saveBoardState, finishGame, code]);
+  }, [boardState, isMyTurn, gameData, saveBoardState, finishGame, code, resetBattleSync]);
 
   // Battle ended — only attacker applies and saves result; defender waits for polling
   const handleBattleEnd = useCallback((attackerWon: boolean) => {
@@ -468,7 +470,7 @@ export default function GamePage() {
               if (!opponentData || (opponentData.hp === 0 && opponentData.x === 0 && opponentData.y === 0)) return null;
               return {
                 ...opponentData,
-                bullets: remoteSnapshot.bullets,
+                bullets: (remoteSnapshot.bullets ?? []).filter(b => b.owner !== myRoleRef.current),
                 winner: remoteSnapshot.winner,
                 tick: remoteSnapshot.tick,
               };

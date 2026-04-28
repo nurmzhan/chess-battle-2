@@ -19,13 +19,21 @@ interface PlayerSnap {
 export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender') {
   const [remoteSnapshot, setRemoteSnapshot] = useState<BattleSnapshot | null>(null);
   const lastTickRef = useRef(0);
+  const lastWinnerRef = useRef<'attacker' | 'defender' | null>(null);
   const pendingRef = useRef<PlayerSnap | null>(null);
   const isSendingRef = useRef(false);
 
+  const resetBattleSync = useCallback(() => {
+    lastTickRef.current = 0;
+    lastWinnerRef.current = null;
+    pendingRef.current = null;
+    setRemoteSnapshot(null);
+  }, []);
+
   // Reset tick counter whenever roomCode or role changes (new battle session)
   useEffect(() => {
-    lastTickRef.current = 0;
-  }, [roomCode, myRole]);
+    resetBattleSync();
+  }, [roomCode, myRole, resetBattleSync]);
 
   // Push my snapshot to DB every ~100ms (throttled)
   // Accepts PlayerSnap (my own position/state) and wraps it into the role field
@@ -70,8 +78,12 @@ export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender')
         if (!res.ok) return;
         const data = await res.json();
         const snap: BattleSnapshot = data.snapshot;
-        if (snap && snap.tick > lastTickRef.current) {
+        if (
+          snap &&
+          (snap.tick > lastTickRef.current || snap.winner !== lastWinnerRef.current)
+        ) {
           lastTickRef.current = snap.tick;
+          lastWinnerRef.current = snap.winner;
           setRemoteSnapshot(snap);
         }
       } catch { /* ignore */ }
@@ -80,5 +92,5 @@ export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender')
     return () => clearInterval(iv);
   }, [roomCode]);
 
-  return { remoteSnapshot, pushSnapshot };
+  return { remoteSnapshot, pushSnapshot, resetBattleSync };
 }

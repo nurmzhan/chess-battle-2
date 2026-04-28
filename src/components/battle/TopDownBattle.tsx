@@ -166,6 +166,9 @@ export function TopDownBattle({
         life: 50,
         color: myRole === 'attacker' ? '#fb923c' : '#a78bfa',
       });
+      if (s.thp <= 0 && !endCalledRef.current) {
+        triggerEnd(s, myRole);
+      }
     }
 
     // Their bullets — replace array (server always sends latest set)
