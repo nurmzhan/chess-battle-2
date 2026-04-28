@@ -461,20 +461,7 @@ export default function GamePage() {
             defenderPiece={battle.defender}
             myRole={myRoleRef.current}
             onSnapshot={pushSnapshot}
-            remoteSnap={(() => {
-              if (!remoteSnapshot) return null;
-              // Extract the opponent's data from the merged BattleSnapshot
-              const opponentData = myRoleRef.current === 'attacker' ? remoteSnapshot.defender : remoteSnapshot.attacker;
-              // Guard: if opponent hasn't sent any data yet (hp=0, x=0, y=0), treat as no snapshot
-              // to avoid instant battle-end from empty API store defaults
-              if (!opponentData || (opponentData.hp === 0 && opponentData.x === 0 && opponentData.y === 0)) return null;
-              return {
-                ...opponentData,
-                bullets: (remoteSnapshot.bullets ?? []).filter(b => b.owner !== myRoleRef.current),
-                winner: remoteSnapshot.winner,
-                tick: remoteSnapshot.tick,
-              };
-            })()}
+            battleSnap={remoteSnapshot}
             onBattleEnd={handleBattleEnd}
           />
         </div>

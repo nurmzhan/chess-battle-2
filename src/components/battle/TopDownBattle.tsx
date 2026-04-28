@@ -1,12 +1,9 @@
 'use client';
 // TopDownBattle.tsx — clean rewrite
 //
-// SYNC MODEL (авторитетность):
-//   • Каждый игрок ЕДИНСТВЕННЫЙ авторитет по своему HP.
-//   • Урон по СЕБЕ наносится локально из theirBullets (hit detection на своей стороне).
-//   • Урон по ПРОТИВНИКУ виден только через его снапшот (его HP уменьшилось).
-//   • Никакого двойного применения урона нет.
-//   • winner определяется: свой HP <= 0 → я проиграл; их HP <= 0 → я выиграл; remote.winner → принять.
+// SYNC MODEL:
+//   • API route is authoritative for HP, bullet hits, and winner.
+//   • Clients send position + their own bullets and render the shared snapshot.
 //
 // ОПТИМИЗАЦИЯ:
 //   • Снапшот отправляется каждые 2 тика (не каждый кадр).
@@ -14,7 +11,7 @@
 //   • LERP интерполяция для плавного движения противника.
 
 import { useEffect, useRef, useState } from 'react';
-import { Piece, PieceType } from '@/types';
+import { BattleSnapshot, Piece, PieceType } from '@/types';
 
 const PIECE_STATS: Record<PieceType, {
   hp: number; speed: number; bulletSpeed: number;
@@ -59,7 +56,7 @@ interface Props {
   attackerPiece: Piece;
   defenderPiece: Piece;
   myRole: 'attacker' | 'defender';
-  remoteSnap: PlayerSnap | null;
+  battleSnap: BattleSnapshot | null;
   onSnapshot: (snap: PlayerSnap) => void;
   onBattleEnd: (attackerWon: boolean) => void;
 }
@@ -79,7 +76,7 @@ function hitsObstacle(x: number, y: number, r: number) {
 }
 
 export function TopDownBattle({
-  attackerPiece, defenderPiece, myRole, remoteSnap, onSnapshot, onBattleEnd,
+  attackerPiece, defenderPiece, myRole, battleSnap, onSnapshot, onBattleEnd,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [winner, setWinner] = useState<'attacker' | 'defender' | null>(null);
@@ -136,46 +133,65 @@ export function TopDownBattle({
     return () => clearInterval(iv);
   }, []);
 
-  // ── Apply remote snapshot (opponent's authoritative data) ──
+  // ── Apply shared authoritative battle snapshot ──
   useEffect(() => {
-    if (!remoteSnap) return;
+    if (!battleSnap) return;
     const s = g.current;
 
-    // Always accept remote winner — even if we think we already won
-    // This prevents one player getting stuck when the other already exited
-    if (remoteSnap.winner && !endCalledRef.current) {
-      triggerEnd(s, remoteSnap.winner);
+    if (battleSnap.winner && !endCalledRef.current) {
+      triggerEnd(s, battleSnap.winner);
       return;
     }
 
     if (s.winner) return; // battle already decided locally, skip position updates
 
-    // Update their visual position
-    s.targetTx = remoteSnap.x;
-    s.targetTy = remoteSnap.y;
-    s.tangle = remoteSnap.angle;
+    const myData = myRole === 'attacker' ? battleSnap.attacker : battleSnap.defender;
+    const theirData = myRole === 'attacker' ? battleSnap.defender : battleSnap.attacker;
+    const bullets = battleSnap.bullets ?? [];
 
-    // Their HP (they are authoritative) — only go down, never up
-    if (remoteSnap.hp < s.thp) {
-      const dmg = Math.round(s.thp - remoteSnap.hp);
-      s.thp = remoteSnap.hp;
-      s.dmgNums.push({
-        x: s.tx + (Math.random() - 0.5) * 24,
-        y: s.ty - 20,
-        value: dmg,
-        life: 50,
-        color: myRole === 'attacker' ? '#fb923c' : '#a78bfa',
-      });
-      if (s.thp <= 0 && !endCalledRef.current) {
-        triggerEnd(s, myRole);
+    if (theirData && !(theirData.hp === 0 && theirData.x === 0 && theirData.y === 0)) {
+      s.targetTx = theirData.x;
+      s.targetTy = theirData.y;
+      s.tangle = theirData.angle;
+
+      if (theirData.hp < s.thp) {
+        const dmg = Math.round(s.thp - theirData.hp);
+        s.dmgNums.push({
+          x: s.tx + (Math.random() - 0.5) * 24,
+          y: s.ty - 20,
+          value: dmg,
+          life: 50,
+          color: myRole === 'attacker' ? '#fb923c' : '#a78bfa',
+        });
       }
+      s.thp = theirData.hp;
     }
 
-    // Their bullets — replace array (server always sends latest set)
-    s.theirBullets = (remoteSnap.bullets ?? []).map(b => ({ ...b }));
+    if (myData && !(myData.hp === 0 && myData.x === 0 && myData.y === 0)) {
+      if (myData.hp < s.mhp) {
+        const dmg = Math.round(s.mhp - myData.hp);
+        spawnParticles(s, s.mx, s.my, '#f87171');
+        s.dmgNums.push({
+          x: s.mx + (Math.random() - 0.5) * 24,
+          y: s.my - 20,
+          value: dmg,
+          life: 50,
+          color: '#f87171',
+        });
+      }
+      s.mhp = myData.hp;
+    }
+
+    s.theirBullets = bullets.filter(b => b.owner !== myRole).map(b => ({ ...b }));
+
+    if (battleSnap.attacker.hp <= 0 && battleSnap.defender.hp > 0) {
+      triggerEnd(s, 'defender');
+    } else if (battleSnap.defender.hp <= 0 && battleSnap.attacker.hp > 0) {
+      triggerEnd(s, 'attacker');
+    }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remoteSnap]);
+  }, [battleSnap]);
 
   function triggerEnd(s: typeof g.current, w: 'attacker' | 'defender') {
     if (endCalledRef.current) return;
@@ -253,11 +269,7 @@ export function TopDownBattle({
         });
       }
 
-      // ── My bullets: move + hit detection on THEIR position ──
-      // (I am NOT authoritative for their HP here — I just send my bullets in snap
-      //  and they apply damage to themselves. But I do show damage numbers when I see their HP drop via remote.)
-      // Exception: if they're very close and we have low latency, this gives immediate feedback
-      // but the true HP comes from their snapshot.
+      // ── My bullets: visual movement only. The API route decides hits and HP. ──
       for (let i = s.myBullets.length - 1; i >= 0; i--) {
         const b = s.myBullets[i];
         b.x += b.vx; b.y += b.vy; b.life--;
@@ -268,14 +280,12 @@ export function TopDownBattle({
           spawnParticles(s, b.x, b.y, '#94a3b8');
           s.myBullets.splice(i, 1); continue;
         }
-        // Visual hit — spawn particles, remove bullet. HP change will come via remote snap.
         if (dist(b, { x: s.tx, y: s.ty }) < theirStats.radius + 6) {
           spawnParticles(s, b.x, b.y, myRole === 'attacker' ? '#818cf8' : '#fb923c');
-          s.myBullets.splice(i, 1);
         }
       }
 
-      // ── Their bullets: move locally for smooth render + I AM authoritative for MY HP ──
+      // ── Their bullets: visual movement only. The API route decides hits and HP. ──
       for (let i = s.theirBullets.length - 1; i >= 0; i--) {
         const b = s.theirBullets[i];
         b.x += b.vx; b.y += b.vy; b.life--;
@@ -287,21 +297,7 @@ export function TopDownBattle({
           s.theirBullets.splice(i, 1); continue;
         }
         if (dist(b, { x: s.mx, y: s.my }) < myStats.radius + 6) {
-          const dmg = b.damage;
-          s.mhp = Math.max(0, s.mhp - dmg);
           spawnParticles(s, b.x, b.y, myRole === 'attacker' ? '#a78bfa' : '#fb923c');
-          s.dmgNums.push({
-            x: s.mx + (Math.random() - 0.5) * 24,
-            y: s.my - 20,
-            value: dmg, life: 50, color: '#f87171',
-          });
-          s.theirBullets.splice(i, 1);
-          // I determine MY death
-          if (s.mhp <= 0 && !s.winner) {
-            const loser = myRole;
-            const w: 'attacker' | 'defender' = loser === 'attacker' ? 'defender' : 'attacker';
-            triggerEnd(s, w);
-          }
         }
       }
 
