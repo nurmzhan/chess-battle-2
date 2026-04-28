@@ -7,14 +7,24 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 
 import { BattleSnapshot } from '@/types';
+
+// Snapshot of a single player — what TopDownBattle sends via onSnapshot
+interface PlayerSnap {
+  x: number; y: number; hp: number; angle: number;
+  bullets: BattleSnapshot['bullets'];
+  winner: 'attacker' | 'defender' | null;
+  tick: number;
+}
+
 export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender') {
   const [remoteSnapshot, setRemoteSnapshot] = useState<BattleSnapshot | null>(null);
   const lastTickRef = useRef(0);
-  const pendingRef = useRef<BattleSnapshot | null>(null);
+  const pendingRef = useRef<PlayerSnap | null>(null);
   const isSendingRef = useRef(false);
 
   // Push my snapshot to DB every ~100ms (throttled)
-  const pushSnapshot = useCallback((snap: BattleSnapshot) => {
+  // Accepts PlayerSnap (my own position/state) and wraps it into the role field
+  const pushSnapshot = useCallback((snap: PlayerSnap) => {
     pendingRef.current = snap;
   }, []);
 
@@ -26,10 +36,19 @@ export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender')
       pendingRef.current = null;
       isSendingRef.current = true;
       try {
+        // Wrap my PlayerSnap into the role field the API expects
+        const playerState = { x: snap.x, y: snap.y, hp: snap.hp, angle: snap.angle };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const payload: any = {
+          [myRole]: playerState,
+          bullets: snap.bullets,
+          winner: snap.winner,
+          tick: snap.tick,
+        };
         await fetch(`/api/game/${roomCode}/battle`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ role: myRole, snapshot: snap }),
+          body: JSON.stringify({ role: myRole, snapshot: payload }),
         });
       } catch { /* ignore */ }
       isSendingRef.current = false;

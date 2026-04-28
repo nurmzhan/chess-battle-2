@@ -437,7 +437,13 @@ export default function GamePage() {
             defenderPiece={battle.defender}
             myRole={myRole}
             onSnapshot={pushSnapshot}
-            remoteSnapshot={remoteSnapshot}
+            remoteSnap={remoteSnapshot ? {
+              // Extract the opponent's data from the merged BattleSnapshot
+              ...(myRole === 'attacker' ? remoteSnapshot.defender : remoteSnapshot.attacker),
+              bullets: remoteSnapshot.bullets,
+              winner: remoteSnapshot.winner,
+              tick: remoteSnapshot.tick,
+            } : null}
             onBattleEnd={handleBattleEnd}
           />
         </div>
