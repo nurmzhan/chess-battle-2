@@ -121,7 +121,9 @@ export default function GamePage() {
   useEffect(() => {
     fetchGame();
     // Keep board polling modest; battle realtime uses /battle while a fight is active.
-    pollRef.current = setInterval(fetchGame, 1000);
+    pollRef.current = setInterval(() => {
+      if (!battleRef.current) fetchGame();
+    }, 1000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [fetchGame]);
 

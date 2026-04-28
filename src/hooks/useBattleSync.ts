@@ -11,6 +11,7 @@ import { BattleSnapshot } from '@/types';
 interface PlayerSnap {
   x: number; y: number; hp: number; angle: number;
   bullets: BattleSnapshot['bullets'];
+  hits?: Array<{ id: number; owner: 'attacker' | 'defender'; damage: number }>;
   winner: 'attacker' | 'defender' | null;
   tick: number;
 }
@@ -54,6 +55,7 @@ export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender',
         const payload: any = {
           [myRole]: playerState,
           bullets: snap.bullets,
+          hits: snap.hits ?? [],
           winner: snap.winner,
           tick: snap.tick,
         };
@@ -75,7 +77,7 @@ export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender',
       isSendingRef.current = false;
     };
     if (!enabled) return;
-    const iv = setInterval(flush, 100);
+    const iv = setInterval(flush, 250);
     return () => clearInterval(iv);
   }, [roomCode, myRole, enabled]);
 
@@ -99,7 +101,7 @@ export function useBattleSync(roomCode: string, myRole: 'attacker' | 'defender',
         }
       } catch { /* ignore */ }
     };
-    const iv = setInterval(poll, 500);
+    const iv = setInterval(poll, 1000);
     return () => clearInterval(iv);
   }, [roomCode, enabled]);
 

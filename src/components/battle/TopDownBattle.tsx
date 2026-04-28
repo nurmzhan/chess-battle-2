@@ -48,6 +48,7 @@ interface Particle { x: number; y: number; vx: number; vy: number; life: number;
 interface PlayerSnap {
   x: number; y: number; hp: number; angle: number;
   bullets: Bullet[];
+  hits?: Array<{ id: number; owner: 'attacker' | 'defender'; damage: number }>;
   winner: 'attacker' | 'defender' | null;
   tick: number;
 }
@@ -118,6 +119,7 @@ export function TopDownBattle({
     tick: 0,
     lastSnapTick: 0,
     rafId: 0,
+    pendingHits: [] as Array<{ id: number; owner: 'attacker' | 'defender'; damage: number }>,
 
     // Visuals
     particles: [] as Particle[],
@@ -288,6 +290,8 @@ export function TopDownBattle({
         }
         if (dist(b, { x: s.tx, y: s.ty }) < theirStats.radius + 6) {
           spawnParticles(s, b.x, b.y, myRole === 'attacker' ? '#818cf8' : '#fb923c');
+          s.pendingHits.push({ id: b.id, owner: myRole, damage: b.damage });
+          s.myBullets.splice(i, 1);
         }
       }
 
@@ -308,11 +312,14 @@ export function TopDownBattle({
       }
 
       // ── Send my snapshot every 2 ticks ──
-      if (s.tick - s.lastSnapTick >= 2) {
+      if (s.pendingHits.length > 0 || s.tick - s.lastSnapTick >= 2) {
         s.lastSnapTick = s.tick;
+        const hits = s.pendingHits;
+        s.pendingHits = [];
         onSnapshot({
           x: s.mx, y: s.my, hp: s.mhp, angle: s.mangle,
           bullets: s.myBullets,
+          hits,
           winner: s.winner,
           tick: s.tick,
         });
